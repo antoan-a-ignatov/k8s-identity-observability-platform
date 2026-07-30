@@ -2,8 +2,8 @@
 
 A Kubernetes-based platform demonstrating GitOps deployment, centralized logging, identity management, and CI/CD using GitLab, ArgoCD, Keycloak, PostgreSQL and ELK.
 
-
-identity-devops-platform/
+```
+k8s-identity-observability-platform//
 │
 ├── app/
 │   ├── src/
@@ -26,3 +26,4 @@ identity-devops-platform/
 ├── .gitlab-ci.yml
 ├── README.md
 └── kind-config.yaml
+```
