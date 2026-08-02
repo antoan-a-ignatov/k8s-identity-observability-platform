@@ -47,6 +47,6 @@ push:
     - docker load -i image.tar
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - docker push "$IMAGE_TAG"
-  needs: ["scan"]
+  needs: ["build", "scan"]
   only:
     - main
