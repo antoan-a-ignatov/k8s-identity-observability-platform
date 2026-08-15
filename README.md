@@ -2,9 +2,9 @@
 
 ## Project Status
 
-**Current Version:** 0.1.0
+**Current Version:** 0.2.0
 
-**Status:** Milestone 1 complete - self-hosted GitLab Runner registered, CI pipeline (lint, build, scan, push) running green on every push to main. Cluster, identity, GitOps, and observability layers in progress.
+**Status:** Milestones 1 and 2 complete - self-hosted GitLab Runner registered, CI pipeline (lint, build, scan, push) running green on every push to main. kind cluster provisioned with namespaces, PostgreSQL deployed and operated, Python backup script verified. Identity, GitOps, and observability layers in progress.
 
 ## Introduction
 
@@ -42,11 +42,13 @@ Kubernetes-based platform demonstrating GitOps deployment, centralized logging, 
 
 ```
 app/                Placeholder Flask application
-k8s/                Kubernetes manifests (app, argocd, keycloak, logging, postgres)
+k8s/                Kubernetes manifests
+  kind-config.yaml  Local cluster configuration
+  namespaces.yaml   Namespace definitions (app, identity, data, logging)
+  data/             PostgreSQL StatefulSet and Service
 scripts/            Automation scripts (backup, health-check, environment bootstrap)
 docs/               Documentation and screenshots
 .gitlab-ci.yml       CI/CD pipeline definition
-kind-config.yaml     Local cluster configuration
 ```
 
 ## Technology Stack
@@ -86,9 +88,11 @@ The environment is reproducible on a second machine via two bootstrap scripts (`
 
 **No credit card, no shared runners:** GitLab requires card verification to use shared runners on GitLab.com. Solved by running a self-hosted GitLab Runner locally instead, registered against the project with shared/instance runners explicitly disabled.
 
-**RAM-constrained local environment:** Developing on an 8GB machine ruled out running the full stack concurrently. Components are staged up and down deliberately, with WSL2's memory cap raised to 6GB and swap enabled as a buffer.
+**RAM-constrained local environment:** Developing on an 8GB machine ruled out running the full stack concurrently. Components are staged up and down deliberately, with WSL2's memory cap raised to 6GB and swap enabled as a buffer. Verified with a smoke test: a kind cluster plus a single-node Elasticsearch instance (512Mi heap) left roughly 3.9Gi available after settling, confirming the staging strategy has headroom before heavier components are added.
 
 **Runner token exposure:** A runner authentication token was inadvertently shared during setup. Rotated immediately via `gitlab-runner reset-token` before continuing.
+
+**Secrets over plaintext:** PostgreSQL credentials are generated with a random password and created directly as a Kubernetes Secret (`kubectl create secret`), never written to a committed manifest. A Secret alone is only base64-encoded, not encrypted, so this is treated as a floor, not a solution. Vault or External Secrets Operator, listed under Planned Improvements, is the intended path to real encryption at rest.
 
 **LATER:** Keycloak HA and ELK staging notes, once those milestones are complete.
 
@@ -99,3 +103,7 @@ The environment is reproducible on a second machine via two bootstrap scripts (`
 - MLOps / GPU workloads in Kubernetes (separate project)
 - Keycloak HA: external session store (Infinispan/Redis)
 - Production secrets management: Vault or External Secrets Operator
+
+## AI Diligence Statement
+
+An AI assistant was used throughout this project to augment learning and expedite execution: explaining concepts, drafting manifests and scripts for review, and troubleshooting. All architectural decisions, command execution, and verification of results were performed by the author.
