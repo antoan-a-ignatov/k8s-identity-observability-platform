@@ -1,3 +1,8 @@
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
 stages:
   - lint
   - build
@@ -50,3 +55,46 @@ push:
   needs: ["build", "scan"]
   only:
     - main
+
+keycloak-build:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  rules:
+    - changes:
+        - docker/keycloak/**
+  script:
+    - docker build -t "$CI_REGISTRY_IMAGE:keycloak-$CI_COMMIT_SHORT_SHA" -f docker/keycloak/Dockerfile docker/keycloak
+    - docker save "$CI_REGISTRY_IMAGE:keycloak-$CI_COMMIT_SHORT_SHA" -o keycloak-image.tar
+  artifacts:
+    paths:
+      - keycloak-image.tar
+    expire_in: 1 hour
+
+keycloak-scan:
+  stage: scan
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  rules:
+    - changes:
+        - docker/keycloak/**
+  script:
+    - trivy image --scanners vuln --pkg-types os --input keycloak-image.tar --severity HIGH,CRITICAL
+  needs: ["keycloak-build"]
+
+keycloak-push:
+  stage: push
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - docker/keycloak/**
+  script:
+    - docker load -i keycloak-image.tar
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker push "$CI_REGISTRY_IMAGE:keycloak-$CI_COMMIT_SHORT_SHA"
+  needs: ["keycloak-build", "keycloak-scan"]
