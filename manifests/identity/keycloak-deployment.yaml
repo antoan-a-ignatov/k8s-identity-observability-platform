@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: keycloak
-          image: registry.gitlab.com/antoan-a-ignatov/k8s-identity-observability-platform:keycloak-26.6.4
+          image: registry.gitlab.com/antoan-a-ignatov/k8s-identity-observability-platform:keycloak-eea740c3
           args: ["start", "--optimized"]
           ports:
             - name: http
