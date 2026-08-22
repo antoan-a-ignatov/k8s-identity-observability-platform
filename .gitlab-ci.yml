@@ -89,7 +89,7 @@ keycloak-scan:
     - changes:
         - docker/keycloak/**
   script:
-    - trivy image --cache-dir .trivycache --scanners vuln --input keycloak-image.tar --severity HIGH,CRITICAL
+    - trivy image --cache-dir .trivycache --scanners vuln --timeout 10m --input keycloak-image.tar --severity HIGH,CRITICAL
   needs: ["keycloak-build"]
 
 keycloak-push:

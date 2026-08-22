@@ -8,7 +8,7 @@ ENV KC_METRICS_ENABLED=true
 
 RUN /opt/keycloak/bin/kc.sh build
 
-# Stage 2: runtime
+# Stage 2: Runtime
 FROM quay.io/keycloak/keycloak:26.6.4
 COPY --from=builder /opt/keycloak/ /opt/keycloak/
 
