@@ -69,8 +69,21 @@ Pipeline runs on a self-hosted GitLab Runner (Docker executor), avoiding any dep
 **LATER:** screenshot of a green pipeline run.
 
 ## Identity and Access
+Keycloak runs in production/optimized mode as a single replica, wired to the
+existing PostgreSQL instance via a dedicated `keycloak` database and role.
+The image is built via a two-stage Dockerfile (pre-baking `kc.sh build` output)
+and published through a dedicated CI job to GitLab's Container Registry, since
+the stock Keycloak image doesn't support `start --optimized` out of the box.
 
-**LATER:** Keycloak setup, realm/client configuration, SSO login flow, HA design notes.
+A `platform` realm and `placeholder-app` client (confidential, standard flow)
+are configured for the application's SSO login, to be wired up in Milestone 4.
+
+HA is not run in this environment due to local resource constraints. Keycloak
+supports HA via an external distributed cache (Infinispan or Redis) for shared
+session state across replicas, avoiding sticky-session dependence on a single
+pod. This would require an external Infinispan/Redis cluster, `KC_CACHE=ispn`
+with remote-store configuration, and multiple replicas behind a load balancer
+with no session affinity requirement.
 
 **LATER:** screenshot of Keycloak login flow.
 
