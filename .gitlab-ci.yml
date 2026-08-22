@@ -40,7 +40,7 @@ scan:
     name: aquasec/trivy:latest
     entrypoint: [""]
   script:
-    - trivy image --input image.tar --severity HIGH,CRITICAL
+    - trivy image --timeout 10m --input image.tar --severity HIGH,CRITICAL
   needs: ["build"]
 
 push:
