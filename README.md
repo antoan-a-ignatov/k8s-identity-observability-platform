@@ -2,9 +2,15 @@
 
 ## Project Status
 
-**Current Version:** 0.2.0
+**Current Version:** 0.3.0
 
-**Status:** Milestones 1 and 2 complete - self-hosted GitLab Runner registered, CI pipeline (lint, build, scan, push) running green on every push to main. kind cluster provisioned with namespaces, PostgreSQL deployed and operated, Python backup script verified. Identity, GitOps, and observability layers in progress.
+**Status:** Milestones 1, 2, and 3 complete - self-hosted GitLab Runner registered,
+CI pipeline (lint, build, scan, push) running green on every push to main, with
+Trivy vulnerability DB caching to avoid slow/unreliable re-downloads. kind cluster
+provisioned with namespaces, PostgreSQL deployed and operated, Python backup
+script verified. Keycloak deployed in production mode via a custom CI-built
+image, wired to PostgreSQL, with a realm and client configured for SSO.
+GitOps and observability layers in progress.
 
 ## Introduction
 
@@ -64,7 +70,20 @@ docs/               Documentation and screenshots
 
 ## CI/CD Pipeline
 
-Pipeline runs on a self-hosted GitLab Runner (Docker executor), avoiding any dependency on GitLab's shared runners or a credit card. Stages: lint (ruff) -> build (Docker) -> scan (Trivy) -> push (GitLab Container Registry). Push only runs on `main`, gated behind a required passing pipeline.
+Pipeline runs on a self-hosted GitLab Runner (Docker executor), avoiding any
+dependency on GitLab's shared runners or a credit card. Stages: lint (ruff) ->
+build (Docker) -> scan (Trivy) -> push (GitLab Container Registry). Push only
+runs on `main`, gated behind a required passing pipeline.
+
+A separate build/scan/push pipeline builds a custom Keycloak image via a
+two-stage Dockerfile, since Keycloak's stock image doesn't support
+`start --optimized` without a prior build step. Trivy's vulnerability and Java
+dependency databases are cached between pipeline runs (GitLab CI cache) to
+avoid slow re-downloads and known reliability issues with Trivy's Java DB.
+
+Trivy scan findings are currently reported but non-blocking (no `--exit-code`
+set) - visibility without gating the pipeline on every transitive CVE in
+upstream base images.
 
 **LATER:** screenshot of a green pipeline run.
 
@@ -107,7 +126,24 @@ The environment is reproducible on a second machine via two bootstrap scripts (`
 
 **Secrets over plaintext:** PostgreSQL credentials are generated with a random password and created directly as a Kubernetes Secret (`kubectl create secret`), never written to a committed manifest. A Secret alone is only base64-encoded, not encrypted, so this is treated as a floor, not a solution. Vault or External Secrets Operator, listed under Planned Improvements, is the intended path to real encryption at rest.
 
-**LATER:** Keycloak HA and ELK staging notes, once those milestones are complete.
+**Keycloak `start --optimized` requires a pre-built image:** The stock Keycloak
+image fails outright if `--optimized` is passed without a prior `kc.sh build`
+step baked in. Solved with a two-stage Dockerfile that runs the build at image-build
+time, published via a dedicated CI job to the project's Container Registry.
+
+**Keycloak hostname/redirect URL configuration:** Behind a plain port-forward
+(no reverse proxy), Keycloak's generated redirect URLs dropped the port,
+causing browser requests to hang or fail. Resolved by setting `KC_HOSTNAME` to
+a full URL (scheme + host + port) rather than a bare hostname, per Keycloak's
+hostname v2 configuration guide.
+
+**Trivy Java DB reliability:** Scanning a JVM-based image (Keycloak) triggers a
+~900MB Java DB download that intermittently hung or timed out under this
+project's resource-constrained CI runner. Resolved via GitLab CI caching of
+Trivy's cache directory between runs, combined with an increased job timeout
+to tolerate one slow initial download.
+
+**LATER:** ELK staging notes, once that milestone is complete.
 
 ## Planned Improvements
 
