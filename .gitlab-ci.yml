@@ -39,12 +39,8 @@ scan:
   image:
     name: aquasec/trivy:latest
     entrypoint: [""]
-  cache:
-    key: trivy-db-cache
-    paths:
-      - .trivycache/
   script:
-    - trivy image --timeout 10m --input image.tar --severity HIGH,CRITICAL
+    - trivy image --cache-dir /trivycache --scanners vuln --timeout 10m --input image.tar --severity HIGH,CRITICAL
   needs: ["build"]
 
 push:
@@ -81,16 +77,12 @@ keycloak-scan:
   image:
     name: aquasec/trivy:latest
     entrypoint: [""]
-  cache:
-    key: trivy-db-cache
-    paths:
-      - .trivycache/
   timeout: 2h
   rules:
     - changes:
         - docker/keycloak/**
   script:
-    - trivy image --cache-dir .trivycache --scanners vuln --timeout 10m --input keycloak-image.tar --severity HIGH,CRITICAL
+    - trivy image --cache-dir /trivycache --scanners vuln --timeout 10m --input keycloak-image.tar --severity HIGH,CRITICAL
   needs: ["keycloak-build"]
 
 keycloak-push:
