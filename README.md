@@ -71,14 +71,14 @@ docs/               Documentation and screenshots
 ## CI/CD Pipeline
 
 Pipeline runs on a self-hosted GitLab Runner (Docker executor), avoiding any
-dependency on GitLab's shared runners or a credit card. Stages: lint (ruff) ->
+dependency on GitLab's shared runners. Stages: lint (ruff) ->
 build (Docker) -> scan (Trivy) -> push (GitLab Container Registry). Push only
 runs on `main`, gated behind a required passing pipeline.
 
 A separate build/scan/push pipeline builds a custom Keycloak image via a
 two-stage Dockerfile, since Keycloak's stock image doesn't support
 `start --optimized` without a prior build step. Trivy's vulnerability and Java
-dependency databases are cached between pipeline runs (GitLab CI cache) to
+dependency databases are cached between pipeline runs via a runner-level persistent volume to
 avoid slow re-downloads and known reliability issues with Trivy's Java DB.
 
 Trivy scan findings are currently reported but non-blocking (no `--exit-code`
@@ -137,11 +137,23 @@ causing browser requests to hang or fail. Resolved by setting `KC_HOSTNAME` to
 a full URL (scheme + host + port) rather than a bare hostname, per Keycloak's
 hostname v2 configuration guide.
 
-**Trivy Java DB reliability:** Scanning a JVM-based image (Keycloak) triggers a
-~900MB Java DB download that intermittently hung or timed out under this
-project's resource-constrained CI runner. Resolved via GitLab CI caching of
-Trivy's cache directory between runs, combined with an increased job timeout
-to tolerate one slow initial download.
+**Trivy Java DB reliability:** Scanning a JVM-based image (Keycloak) requires
+Trivy's ~900MB Java DB, stored under the same cache directory as the ~100MB
+main vulnerability DB. GitLab's built-in cache mechanism works by archiving
+that directory into a zip and restoring it each run - on this project's older,
+slower hardware, archiving a cache that size took 20+ minutes on its own,
+eventually exceeding both GitLab Runner's internal cache-archiver timeout and
+the project's 1-hour job timeout, failing the pipeline outright. Increasing
+the job timeout alone did not solve this, since the bottleneck was CPU-bound
+compression, not simply a slow-but-completable step.
+
+Resolved by bypassing GitLab's archive-based cache entirely: the runner's
+`config.toml` bind-mounts a persistent host directory
+(`/home/gitlab-runner/trivycache` on the runner machine) directly into every
+scan job container, so the DB is present on disk with no per-run archive or
+extract step. Both databases were pre-populated once, out-of-band, via
+`trivy image --download-db-only` and `trivy image --download-java-db-only`,
+avoiding a cold multi-hundred-MB download inside a time-boxed CI job.
 
 **LATER:** ELK staging notes, once that milestone is complete.
 
