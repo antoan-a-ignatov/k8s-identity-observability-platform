@@ -1,0 +1,13 @@
+<!doctype html>
+<html>
+<head><title>Platform App</title></head>
+<body>
+  <h1>Platform App</h1>
+  {% if user %}
+    <p>Logged in as {{ user.preferred_username }}</p>
+    <a href="/protected">Protected page</a> | <a href="/logout">Logout</a>
+  {% else %}
+    <a href="/login">Login</a>
+  {% endif %}
+</body>
+</html>
