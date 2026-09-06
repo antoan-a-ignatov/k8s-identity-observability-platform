@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+  namespace: app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: platform-app
+  template:
+    metadata:
+      labels:
+        app: platform-app
+    spec:
+      containers:
+        - name: app
+          image: registry.gitlab.com/antoan-a-ignatov/k8s-identity-observability-platform:25d7d2e3
+          ports:
+            - containerPort: 5000
+          env:
+            - name: KEYCLOAK_SERVER_URL
+              value: "http://keycloak.identity.svc.cluster.local:8080"
+            - name: KEYCLOAK_REALM
+              value: "platform"
+            - name: KEYCLOAK_CLIENT_ID
+              value: "placeholder-app"
+            - name: REDIRECT_URI
+              value: "http://localhost:5000/callback"
+            - name: FLASK_SECRET_KEY
+              valueFrom:
+                secretKeyRef: { name: app-secrets, key: flask-secret-key }
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: { name: app-secrets, key: keycloak-client-secret }
+            - name: KEYCLOAK_BROWSER_URL
+              value: "http://localhost:8080"
+          resources:
+            requests: { memory: "128Mi", cpu: "100m" }
+            limits: { memory: "256Mi", cpu: "500m" }
+      imagePullSecrets:
+        - name: gitlab-registry

@@ -51,7 +51,7 @@ def logout():
     session.pop("user", None)
     base_url = os.environ["REDIRECT_URI"].rsplit("/callback", 1)[0]
     logout_url = (
-        f'{os.environ["KEYCLOAK_SERVER_URL"]}/realms/'
+        f'{os.environ["KEYCLOAK_BROWSER_URL"]}/realms/'
         f'{os.environ["KEYCLOAK_REALM"]}/protocol/openid-connect/logout'
         f'?redirect_uri={base_url}'
     )

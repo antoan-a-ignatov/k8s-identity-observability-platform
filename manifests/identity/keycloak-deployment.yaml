@@ -44,6 +44,8 @@ spec:
               value: "true"
             - name: KC_HOSTNAME
               value: "http://localhost:8080"
+            - name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC
+              value: "true"
           resources:
             requests: { memory: "512Mi", cpu: "250m" }
             limits: { memory: "1Gi", cpu: "1" }
