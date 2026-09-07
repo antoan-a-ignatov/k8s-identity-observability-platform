@@ -1,6 +1,9 @@
 workflow:
   rules:
+    # Create pipelines for merge requests
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+
+    # Create pipelines for pushes to main
     - if: '$CI_COMMIT_BRANCH == "main"'
 
 stages:
@@ -13,6 +16,25 @@ variables:
   IMAGE_TAG: "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
   DOCKER_HOST: tcp://docker:2375
   DOCKER_TLS_CERTDIR: ""
+
+# --------------------------------------------------
+# Pipeline check
+# Ensures MR pipelines always contain at least one job
+# even when neither app/ nor docker/keycloak/ changed.
+# --------------------------------------------------
+
+pipeline-check:
+  stage: lint
+  image: alpine:latest
+  script:
+    - echo "Pipeline created successfully."
+    - echo "No application or Keycloak changes detected, so build jobs may be skipped."
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+
+# --------------------------------------------------
+# App
+# --------------------------------------------------
 
 lint:
   stage: lint
@@ -45,12 +67,15 @@ scan:
   image:
     name: aquasec/trivy:latest
     entrypoint: [""]
+  timeout: 2h
   rules:
     - changes:
         - app/**
   script:
     - trivy image --cache-dir /trivycache --scanners vuln --timeout 10m --input image.tar --severity HIGH,CRITICAL
-  needs: ["build"]
+  needs:
+    - job: build
+      artifacts: true
 
 push:
   stage: push
@@ -65,7 +90,14 @@ push:
     - docker load -i image.tar
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - docker push "$IMAGE_TAG"
-  needs: ["build", "scan"]
+  needs:
+    - job: build
+      artifacts: true
+    - job: scan
+
+# --------------------------------------------------
+# Keycloak
+# --------------------------------------------------
 
 keycloak-build:
   stage: build
@@ -94,7 +126,9 @@ keycloak-scan:
         - docker/keycloak/**
   script:
     - trivy image --cache-dir /trivycache --scanners vuln --timeout 10m --input keycloak-image.tar --severity HIGH,CRITICAL
-  needs: ["keycloak-build"]
+  needs:
+    - job: keycloak-build
+      artifacts: true
 
 keycloak-push:
   stage: push
@@ -109,4 +143,7 @@ keycloak-push:
     - docker load -i keycloak-image.tar
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - docker push "$CI_REGISTRY_IMAGE:keycloak-$CI_COMMIT_SHORT_SHA"
-  needs: ["keycloak-build", "keycloak-scan"]
+  needs:
+    - job: keycloak-build
+      artifacts: true
+    - job: keycloak-scan
