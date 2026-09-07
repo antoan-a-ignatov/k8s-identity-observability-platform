@@ -58,15 +58,14 @@ push:
   services:
     - docker:24.0.5-dind
   rules:
-    - changes:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
         - app/**
   script:
     - docker load -i image.tar
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - docker push "$IMAGE_TAG"
   needs: ["build", "scan"]
-  only:
-    - main
 
 keycloak-build:
   stage: build
