@@ -2,15 +2,17 @@
 
 ## Project Status
 
-**Current Version:** 0.3.0
+**Current Version:** 0.4.0
 
-**Status:** Milestones 1, 2, and 3 complete - self-hosted GitLab Runner registered,
+**Status:** Milestones 1 through 4 complete - self-hosted GitLab Runner registered,
 CI pipeline (lint, build, scan, push) running green on every push to main, with
 Trivy vulnerability DB caching to avoid slow/unreliable re-downloads. kind cluster
 provisioned with namespaces, PostgreSQL deployed and operated, Python backup
 script verified. Keycloak deployed in production mode via a custom CI-built
-image, wired to PostgreSQL, with a realm and client configured for SSO.
-GitOps and observability layers in progress.
+image, wired to PostgreSQL, with a realm and client configured for SSO. A minimal
+Flask application is deployed behind Keycloak, with a verified end-to-end SSO
+login flow through a NodePort Service. GitOps and observability layers in
+progress.
 
 ## Introduction
 
@@ -35,6 +37,7 @@ Kubernetes-based platform demonstrating GitOps deployment, centralized logging, 
 - GitLab CI/CD pipeline design, running on a self-hosted runner (no shared runner dependency)
 - GitOps deployment workflow with ArgoCD
 - Identity and access management with Keycloak, backed by an operated PostgreSQL instance
+- OpenID Connect application integration (Authlib) with an identity provider, including cross-namespace service resolution
 - Centralized logging with the ELK stack
 - Kubernetes cluster operation on a resource-constrained local machine
 - Python automation for operational tasks (backup, health checks)
@@ -42,19 +45,47 @@ Kubernetes-based platform demonstrating GitOps deployment, centralized logging, 
 
 ## Architecture
 
-**LATER:** architecture diagram (mermaid) once GitOps cutover and identity layer are live.
+```mermaid
+graph TB
+    Browser["Browser"]
+
+    subgraph cluster["kind cluster (local, single node)"]
+        subgraph appns["app namespace"]
+            App["app Deployment<br/>NodePort :30500"]
+        end
+        subgraph identityns["identity namespace"]
+            Keycloak["Keycloak<br/>single replica"]
+        end
+        subgraph datans["data namespace"]
+            Postgres["Postgres<br/>StatefulSet"]
+        end
+        App --> Keycloak
+        Keycloak --> Postgres
+    end
+
+    Browser --> App
+    Browser --> Keycloak
+```
 
 ## Repository Structure
 
 ```
-app/                Placeholder Flask application
-k8s/                Kubernetes manifests
+app/                Flask application with Keycloak OIDC login
+manifests/
+  identity/         Keycloak Deployment, Service, realm export backup
+  app/              Flask app Deployment and NodePort Service
+k8s/
   kind-config.yaml  Local cluster configuration
   namespaces.yaml   Namespace definitions (app, identity, data, logging)
   data/             PostgreSQL StatefulSet and Service
+  argocd/           Reserved for Milestone 5 (GitOps cutover) - not yet populated
+  logging/          Reserved for Milestone 6 (observability) - not yet populated
+  app/, keycloak/   Unused early scaffolding, superseded by manifests/
+backups/            Local-only backups (gitignored) - Postgres dumps, Keycloak realm exports
+docker/             Custom Dockerfiles (Keycloak two-stage build)
 scripts/            Automation scripts (backup, health-check, environment bootstrap)
 docs/               Documentation and screenshots
-.gitlab-ci.yml       CI/CD pipeline definition
+.gitlab-ci.yml      CI/CD pipeline definition
 ```
 
 ## Technology Stack
@@ -104,7 +135,19 @@ pod. This would require an external Infinispan/Redis cluster, `KC_CACHE=ispn`
 with remote-store configuration, and multiple replicas behind a load balancer
 with no session affinity requirement.
 
-**LATER:** screenshot of Keycloak login flow.
+A minimal Flask application (`app/`) authenticates against the `placeholder-app`
+client using Authlib, running as a Deployment with a NodePort Service
+(`manifests/app/`) in the `app` namespace. The app resolves Keycloak via
+in-cluster DNS (`keycloak.identity.svc.cluster.local`) rather than the
+browser-facing hostname - see Engineering Challenges for why that needed its
+own fix.
+
+![Login page](docs/screenshots/1-Login.PNG)
+![Keycloak login form](docs/screenshots/2-Login-Keycloak.PNG)
+![Authenticated protected page](docs/screenshots/3-Loggedin-Protected.PNG)
+![Keycloak logout](docs/screenshots/4-Keycloak-logout.PNG)
+![Logged out confirmation](docs/screenshots/5-Keycloak-loggedout.PNG)
+![App and identity pods running in-cluster](docs/screenshots/6-Pods.PNG)
 
 ## Observability
 
@@ -155,7 +198,27 @@ extract step. Both databases were pre-populated once, out-of-band, via
 `trivy image --download-db-only` and `trivy image --download-java-db-only`,
 avoiding a cold multi-hundred-MB download inside a time-boxed CI job.
 
-**LATER:** ELK staging notes, once that milestone is complete.
+**Cross-namespace Keycloak hostname resolution:** `KC_HOSTNAME` is a single
+fixed value Keycloak uses for every URL it advertises - fine for a browser,
+but wrong for the app pod's server-to-server token exchange, which needs
+Keycloak's in-cluster DNS name instead. Resolved by enabling Keycloak's
+`hostname:v2` backchannel-dynamic option
+(`KC_HOSTNAME_BACKCHANNEL_DYNAMIC=true`), which resolves backend endpoint
+URLs based on the address the request actually came in on, while keeping the
+browser-facing hostname fixed.
+
+**NodePort not reachable from the host on kind + WSL2:** A Service's NodePort
+opens on every node's network interface by default, but kind's node runs as a
+Docker container inside WSL2's own network namespace - not on WSL2's main
+interface, which is the only one Windows automatically forwards to
+`localhost`. Reaching the container's own Docker-bridge IP directly from
+Windows is a documented, unresolved limitation (Windows can route out to it
+but the return path fails). Verified by keeping the Service as a genuine
+NodePort in the manifest, but testing via `kubectl port-forward` instead of
+the raw NodePort address - a testing-method workaround, not a manifest change.
+
+**LATER:** engineering challenges from GitOps cutover (M5) and ELK staging (M6),
+added as each milestone completes.
 
 ## Planned Improvements
 
