@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: app
-          image: registry.gitlab.com/antoan-a-ignatov/k8s-identity-observability-platform:25d7d2e3
+          image: registry.gitlab.com/antoan-a-ignatov/k8s-identity-observability-platform:4ae57be2
           ports:
             - containerPort: 5000
           env:
