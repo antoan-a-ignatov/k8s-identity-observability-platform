@@ -74,17 +74,17 @@ app/                Flask application with Keycloak OIDC login
 manifests/
   identity/         Keycloak Deployment, Service, realm export backup
   app/              Flask app Deployment and NodePort Service
-k8s/
+  data/             PostgreSQL StatefulSet and Service
+  argocd/           Reserved for Milestone 5 (ArgoCD's own install manifests) -
+                    not yet populated
+cluster/
   kind-config.yaml  Local cluster configuration
   namespaces.yaml   Namespace definitions (app, identity, data, logging)
-  data/             PostgreSQL StatefulSet and Service
-  argocd/           Reserved for Milestone 5 (GitOps cutover) - not yet populated
-  logging/          Reserved for Milestone 6 (observability) - not yet populated
-  app/, keycloak/   Unused early scaffolding, superseded by manifests/
-backups/            Local-only backups (gitignored) - Postgres dumps, Keycloak realm exports
 docker/             Custom Dockerfiles (Keycloak two-stage build)
 scripts/            Automation scripts (backup, health-check, environment bootstrap)
-docs/               Documentation and screenshots
+docs/               Documentation, screenshots, and one-off verification manifests
+                    (e.g. es-smoke-test.yaml from the Milestone 2 smoke test)
+backups/            Local-only backups (gitignored) - Postgres dumps, Keycloak realm exports
 .gitlab-ci.yml      CI/CD pipeline definition
 ```
 
