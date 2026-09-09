@@ -217,6 +217,20 @@ but the return path fails). Verified by keeping the Service as a genuine
 NodePort in the manifest, but testing via `kubectl port-forward` instead of
 the raw NodePort address - a testing-method workaround, not a manifest change.
 
+**Secrets committed in plaintext (M3 mistake, caught in M5):** During an earlier
+session a file `keycloak-secret.yaml` with real admin and database
+credentials in plaintext was created and committed to git. The admin password 
+belongs to the initial bootstrap account, which was deleted after a replacement 
+admin user was created - no live exposure there. 
+The Postgres role password was live and
+was rotated directly in Postgres (`ALTER ROLE`), not just in the Secret
+object, since Keycloak's `KC_BOOTSTRAP_ADMIN_*` env vars and DB credentials
+only take effect at first startup and don't retroactively change an
+already-running system. Both Secrets are now created imperatively via
+`kubectl create secret`, matching the pattern already used for
+`app-secrets` and `gitlab-registry` - matching real values are never
+committed to the repository.
+
 **LATER:** engineering challenges from GitOps cutover (M5) and ELK staging (M6),
 added as each milestone completes.
 
