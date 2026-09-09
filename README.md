@@ -74,17 +74,17 @@ app/                Flask application with Keycloak OIDC login
 manifests/
   identity/         Keycloak Deployment, Service, realm export backup
   app/              Flask app Deployment and NodePort Service
-k8s/
+  data/             PostgreSQL StatefulSet and Service
+  argocd/           Reserved for Milestone 5 (ArgoCD's own install manifests) -
+                    not yet populated
+cluster/
   kind-config.yaml  Local cluster configuration
   namespaces.yaml   Namespace definitions (app, identity, data, logging)
-  data/             PostgreSQL StatefulSet and Service
-  argocd/           Reserved for Milestone 5 (GitOps cutover) - not yet populated
-  logging/          Reserved for Milestone 6 (observability) - not yet populated
-  app/, keycloak/   Unused early scaffolding, superseded by manifests/
-backups/            Local-only backups (gitignored) - Postgres dumps, Keycloak realm exports
 docker/             Custom Dockerfiles (Keycloak two-stage build)
 scripts/            Automation scripts (backup, health-check, environment bootstrap)
-docs/               Documentation and screenshots
+docs/               Documentation, screenshots, and one-off verification manifests
+                    (e.g. es-smoke-test.yaml from the Milestone 2 smoke test)
+backups/            Local-only backups (gitignored) - Postgres dumps, Keycloak realm exports
 .gitlab-ci.yml      CI/CD pipeline definition
 ```
 
@@ -216,6 +216,20 @@ Windows is a documented, unresolved limitation (Windows can route out to it
 but the return path fails). Verified by keeping the Service as a genuine
 NodePort in the manifest, but testing via `kubectl port-forward` instead of
 the raw NodePort address - a testing-method workaround, not a manifest change.
+
+**Secrets committed in plaintext (M3 mistake, caught in M5):** During an earlier
+session a file `keycloak-secret.yaml` with real admin and database
+credentials in plaintext was created and committed to git. The admin password 
+belongs to the initial bootstrap account, which was deleted after a replacement 
+admin user was created - no live exposure there. 
+The Postgres role password was live and
+was rotated directly in Postgres (`ALTER ROLE`), not just in the Secret
+object, since Keycloak's `KC_BOOTSTRAP_ADMIN_*` env vars and DB credentials
+only take effect at first startup and don't retroactively change an
+already-running system. Both Secrets are now created imperatively via
+`kubectl create secret`, matching the pattern already used for
+`app-secrets` and `gitlab-registry` - matching real values are never
+committed to the repository.
 
 **LATER:** engineering challenges from GitOps cutover (M5) and ELK staging (M6),
 added as each milestone completes.
