@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**Current Version:** 0.4.0
+**Current Version:** 0.5.0
 
 **Status:** Milestones 1 through 4 complete - self-hosted GitLab Runner registered,
 CI pipeline (lint, build, scan, push) running green on every push to main, with
@@ -11,8 +11,9 @@ provisioned with namespaces, PostgreSQL deployed and operated, Python backup
 script verified. Keycloak deployed in production mode via a custom CI-built
 image, wired to PostgreSQL, with a realm and client configured for SSO. A minimal
 Flask application is deployed behind Keycloak, with a verified end-to-end SSO
-login flow through a NodePort Service. GitOps and observability layers in
-progress.
+login flow through a NodePort Service. ArgoCD (core install) manages the app 
+and Keycloak deployments via GitOps - manifest changes in git sync to the cluster 
+automatically, verified end to end. Observability layer in progress.
 
 ## Introduction
 
@@ -48,8 +49,12 @@ Kubernetes-based platform demonstrating GitOps deployment, centralized logging, 
 ```mermaid
 graph TB
     Browser["Browser"]
+    Git["Git (main branch)"]
 
     subgraph cluster["kind cluster (local, single node)"]
+        subgraph argocdns["argocd namespace"]
+            ArgoCD["ArgoCD (core)"]
+        end
         subgraph appns["app namespace"]
             App["app Deployment<br/>NodePort :30500"]
         end
@@ -59,10 +64,13 @@ graph TB
         subgraph datans["data namespace"]
             Postgres["Postgres<br/>StatefulSet"]
         end
+        ArgoCD -.auto-sync.-> App
+        ArgoCD -.auto-sync.-> Keycloak
         App --> Keycloak
         Keycloak --> Postgres
     end
 
+    Git -.watched by.-> ArgoCD
     Browser --> App
     Browser --> Keycloak
 ```
@@ -75,8 +83,8 @@ manifests/
   identity/         Keycloak Deployment, Service, realm export backup
   app/              Flask app Deployment and NodePort Service
   data/             PostgreSQL StatefulSet and Service
-  argocd/           Reserved for Milestone 5 (ArgoCD's own install manifests) -
-                    not yet populated
+  argocd/           ArgoCD install manifest, default AppProject, and
+                    application definitions for app and identity
 cluster/
   kind-config.yaml  Local cluster configuration
   namespaces.yaml   Namespace definitions (app, identity, data, logging)
@@ -108,13 +116,26 @@ runs on `main`, gated behind a required passing pipeline.
 
 A separate build/scan/push pipeline builds a custom Keycloak image via a
 two-stage Dockerfile, since Keycloak's stock image doesn't support
-`start --optimized` without a prior build step. Trivy's vulnerability and Java
-dependency databases are cached between pipeline runs via a runner-level persistent volume to
-avoid slow re-downloads and known reliability issues with Trivy's Java DB.
+`start --optimized` without a prior build step. Trivy's vulnerability and 
+Java dependency databases are cached via a runner-level host-bound volume 
+(not GitLab's archive-based cache, which proved too slow for a 900MB+ database 
+on this hardware) to avoid slow re-downloads and known reliability issues with Trivy's Java DB.
 
 Trivy scan findings are currently reported but non-blocking (no `--exit-code`
 set) - visibility without gating the pipeline on every transitive CVE in
 upstream base images.
+
+Deployment has moved from manual `kubectl apply` to GitOps: ArgoCD (core
+install, no UI/CLI) watches `manifests/app` and `manifests/identity`
+directly and auto-syncs on every merge to main, with self-healing enabled
+so manual cluster drift is automatically reverted. CI and CD are
+deliberately decoupled - GitLab CI still only builds and pushes images,
+path-filtered to skip when `app/` or `docker/keycloak/` haven't changed;
+ArgoCD is what actually applies manifest changes to the cluster.
+
+![Merged manifest change](docs/screenshots/7-Gitlab-change.PNG)
+![ArgoCD Application synced to the new commit](docs/screenshots/8-ArgoCD-check.PNG)
+![Live cluster resource reflecting the change](docs/screenshots/9-ArgoCD-check2.PNG)
 
 **LATER:** screenshot of a green pipeline run.
 
@@ -231,8 +252,19 @@ already-running system. Both Secrets are now created imperatively via
 `app-secrets` and `gitlab-registry` - matching real values are never
 committed to the repository.
 
-**LATER:** engineering challenges from GitOps cutover (M5) and ELK staging (M6),
-added as each milestone completes.
+**ArgoCD core install has no default AppProject:** A full ArgoCD install
+auto-creates a `default` AppProject via `argocd-server` at first startup.
+Core install skips this entirely, so both Applications failed with
+`InvalidSpecError: Application referencing project default which does not
+exist` until the AppProject was created as its own committed manifest.
+
+**ArgoCD directory sources parse every .yaml/.json file as a manifest:**
+`manifests/identity/` contains a Keycloak realm export (JSON, not a
+Kubernetes resource) alongside the real Deployment/Service. Without
+restricting the Application's source to `directory.include: '*.yaml'`,
+ArgoCD would attempt to parse the export file as a manifest and fail.
+
+**LATER:** engineering challenges from ELK staging (M6),
 
 ## Planned Improvements
 
