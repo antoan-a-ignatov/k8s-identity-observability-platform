@@ -3,6 +3,8 @@ kind: Deployment
 metadata:
   name: app
   namespace: app
+  annotations:
+    gitops-verified: "m5"
 spec:
   replicas: 1
   selector:
